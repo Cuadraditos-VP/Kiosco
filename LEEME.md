@@ -16,6 +16,26 @@ Los datos se guardan en cada dispositivo. Usá el botón de exportar para hacer 
   el código de activación (3 números) se saca con el generador de códigos.
 - La primera vez necesita internet. Abrila dos veces con conexión para que quede todo guardado.
 
+## Compartir el kiosco (dueño y encargado)
+- El dueño entra a **Menú → Ajustes → Compartir el kiosco**. La app sube sus datos a internet y le da un
+  código de 6 números. Con **Enviar invitación** manda el link y el código por WhatsApp.
+- El encargado instala la app, la abre y en *¿Te invitaron a un kiosco?* escribe ese código. No necesita
+  código de activación: solo puede usar el kiosco del dueño.
+- El encargado puede vender y abrir y cerrar la caja. No puede cambiar productos, precios ni ajustes,
+  ni ver el historial.
+- **Cambiar código** saca a todos los que tenían el código anterior.
+- El kiosco compartido necesita internet.
+
+### Firebase
+Usa el mismo proyecto que la lista del súper (`supermercado-ff56a`), en la sección `kioscos`.
+En la consola de Firebase → Realtime Database → Reglas, agregar dentro de `"rules"`:
+
+```json
+"kioscos": {
+  "$codigo": { ".read": true, ".write": true }
+}
+```
+
 ## Clientes de antes
 - Los equipos activados con KyriKiosco o KariKiosco siguen activados (los códigos viejos sirven).
 - Si en el celular se usaba KariKiosco, la primera vez que abre esta app se traen sus productos,
@@ -23,4 +43,4 @@ Los datos se guardan en cada dispositivo. Usá el botón de exportar para hacer 
 
 ## Al actualizar
 Cada vez que reemplaces `index.html`, subí la versión en `sw.js`:
-`const VERSION = "kyrikiosco-v7";` → v8, v9…
+`const VERSION = "kyrikiosco-v8";` → v9, v10…
