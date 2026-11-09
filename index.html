@@ -2138,13 +2138,14 @@ function activacion(arrancar){
   const kEq = LS_KEY + "-equipo", kAct = LS_KEY + "-activacion";
   let eq = null, guardado = null;
   try { eq = localStorage.getItem(kEq); guardado = localStorage.getItem(kAct); } catch {}
-  if (!eq) {
-    const r = new Uint32Array(6); crypto.getRandomValues(r);
-    eq = String(1000 + r[0] % 9000);   // número de equipo: 4 cifras
-    try { localStorage.setItem(kEq, eq); } catch {}
-  }
   const valido = c => { const x = actLimpiar(c); return x === actCodigo3(eq) || ACT_VIEJOS.some(cl => x === actLimpiar(actCodigo(cl, eq))); };
-  if (guardado && valido(guardado)) { arrancar(); return; }
+  if (eq && guardado && valido(guardado)) { arrancar(); return; }
+  // Sin activar: el número de equipo tiene que ser de 4 cifras (los viejos con letras se reemplazan)
+  if (!/^\d{4}$/.test(eq || "")) {
+    const r = new Uint32Array(1); crypto.getRandomValues(r);
+    eq = String(1000 + r[0] % 9000);
+    try { localStorage.setItem(kEq, eq); localStorage.removeItem(kAct); } catch {}
+  }
   const box = document.getElementById("activar"), inp = document.getElementById("actCodigo"), err = document.getElementById("actErr");
   document.getElementById("actEquipo").textContent = eq;
   box.hidden = false;
