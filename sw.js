@@ -1,6 +1,6 @@
 // Cuadraditos Kiosco: funciona sin conexión.
 // Subí el número de versión cada vez que cambies index.html para que el celular tome la nueva.
-const VERSION = "kyrikiosco-v7";
+const VERSION = "kyrikiosco-v8";
 const ARCHIVOS = ["./", "./index.html", "./manifest.webmanifest",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png",
   "./icons/apple-touch-icon.png", "./icons/favicon-32.png"];
@@ -23,8 +23,8 @@ self.addEventListener("fetch", e => {
       .catch(() => caches.match("./index.html")));
     return;
   }
-  // Íconos, tipografías y demás: lo guardado primero
-  if (url.origin === location.origin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com")) {
+  // Íconos, tipografías, Firebase y demás: lo guardado primero
+  if (url.origin === location.origin || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com") || url.hostname === "www.gstatic.com") {
     e.respondWith(caches.match(req).then(hit => hit || fetch(req).then(r => {
       if (r.ok || r.type === "opaque") { const c = r.clone(); caches.open(VERSION).then(x => x.put(req, c)); }
       return r;

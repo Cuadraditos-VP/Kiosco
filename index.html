@@ -153,6 +153,12 @@ aside.tk{position:sticky;top:16px;width:100%;min-width:0;justify-self:stretch;al
 /* Roles y edición */
 body:not(.admin) .solo-admin{display:none!important}
 body.admin .solo-caja{display:none!important}
+body:not(.encargado) .solo-enc{display:none!important}
+body.encargado #cjEliminar,body.encargado #cjRehacer,body.encargado [data-vercaja]{display:none!important}   /* encargado: sin borrar ni ver cajas viejas */
+.compartir{display:grid;gap:8px;padding:2px 0 6px}
+.compartir p{margin:0;color:var(--muted);font-size:14px}
+.compartir .cod{font:700 26px var(--f-num);letter-spacing:.12em}
+#activar .act-sep{border-top:1px solid var(--line);margin:20px 0 6px}
 body.sinclave #btnLogin,body.sinclave #btnClave,body.sinclave #btnSalir,body.sinclave input[type="password"]{display:none!important}   /* sin claves */
 .acc{display:flex;gap:8px;align-items:center}
 .menubtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -376,6 +382,7 @@ dialog::backdrop{background:var(--scrim)}
       <button class="hoybtn solo-admin" id="openHoy" aria-label="Ver ventas de hoy"><span class="hoy"><span>Hoy <b id="caja">$ 0</b></span><span><b id="nVentas">0</b> ventas</span><span class="g">Ganancia <b id="gan">—</b></span></span></button>
     </div>
     <div class="acc">
+    <button class="menubtn solo-enc" id="encCaja" title="Caja" aria-label="Caja"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="10" width="18" height="11" rx="2"/><path d="M7 10V5h10v5"/><path d="M8 15h8"/></svg></button>
     <button class="menubtn lock solo-caja" id="btnLogin" aria-label="Entrar con clave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></button>
     <button class="menubtn solo-admin" id="openHist" title="Historial" aria-label="Historial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></button>
     <button class="menubtn solo-admin" id="openStock" title="Cargar stock" aria-label="Cargar stock"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></button>
@@ -577,6 +584,8 @@ dialog::backdrop{background:var(--scrim)}
       <div class="metcfg" id="metCfg"></div>
       <label class="sgroup" style="padding-top:4px;justify-content:space-between" for="cantMesas">Mesas <input class="num" id="cantMesas" type="text" min="0" max="60" inputmode="numeric" style="width:90px"></label>
       <label class="sgroup" style="padding-top:4px;justify-content:space-between" for="usaClave">Pedir clave de administrador <input id="usaClave" type="checkbox" style="width:22px;height:22px"></label>
+      <div class="sgroup">Compartir el kiosco</div>
+      <div class="compartir" id="compBox"></div>
       <div hidden><div id="editRows"></div><button type="button" id="addProd"></button><button type="button" id="addFold"></button></div>
     </div>
     <footer><button type="button" class="btn go" data-close>Listo</button></footer>
@@ -607,6 +616,9 @@ const LS_KEY = "kyrikiosco-v1";
 const VERSION_AVANZADA = false;
 const usaClave = () => VERSION_AVANZADA && !!mesasCfg.conClave;
 let datosListos = false;   // la configuración guardada ya se leyó
+// Kiosco compartido: { codigo, rol: "dueno" | "encargado" }. El encargado solo vende y maneja la caja.
+let KIOSCO = null; try { KIOSCO = JSON.parse(localStorage.getItem(LS_KEY + "-kiosco") || "null"); } catch {}
+const esEncargado = KIOSCO?.rol === "encargado";
 // Si en este equipo se usaba KariKiosco, la primera vez se traen sus datos y su activación
 try {
   const VIEJA = "karikiosco-v1";
@@ -741,9 +753,15 @@ function cargarLocal(){
 async function iniciar(){
   render();
   let ns = null;
-  try { ns = window.claude?.use ? await window.claude.use("db") : null; } catch { ns = null; }
+  if (KIOSCO) {
+    try { ns = await dbKiosco(KIOSCO); }
+    catch (e) { pantallaMensaje("Sin conexión con el kiosco", "Para usar el kiosco compartido hace falta internet. Conectate y volvé a abrir la app.", "Reintentar"); return; }
+    if (!ns) return;
+  } else {
+    try { ns = window.claude?.use ? await window.claude.use("db") : null; } catch { ns = null; }
+  }
   if (ns) {
-    db = ns; modo = "db"; setSave("ok","Guardado automático");
+    db = ns; modo = "db"; setSave("ok", KIOSCO ? "Kiosco compartido" : "Guardado automático");
     db.doc("registro/productos").onSnapshot(s => {
       productos = s.exists ? JSON.parse(JSON.stringify(s.data().items||[])) : [];
       limpiarCarrito(); render(); if ($("#dlgEdit").open && !editando) renderEdit();
@@ -804,7 +822,7 @@ function render(){
     grid.innerHTML = (hs.length || modoEdicion) ? hs.map(tarjetaProducto).join("") + (modoEdicion ? tarjetaAgregar() : "") : `<div class="empty-list">Carpeta vacía</div>`;
   } else if (sinCaja() && !modoEdicion) {
     crumb.hidden = true;
-    grid.innerHTML = `<div class="empty-list"><strong>Caja cerrada</strong>${esAdmin ? (motivoNoAbrir() ? `<div style="margin-top:12px">${avisoNoAbrir()}</div>` : `<button class="btn go" data-abrircaja style="margin-top:12px;padding:12px 24px">Abrir caja</button>`) : "Pedí que abran la caja para empezar a vender."}</div>`;
+    grid.innerHTML = `<div class="empty-list"><strong>Caja cerrada</strong>${esAdmin || esEncargado ? (motivoNoAbrir() ? `<div style="margin-top:12px">${avisoNoAbrir()}</div>` : `<button class="btn go" data-abrircaja style="margin-top:12px;padding:12px 24px">Abrir caja</button>`) : "Pedí que abran la caja para empezar a vender."}</div>`;
   } else {
     crumb.hidden = true;
     const lista = orden();
@@ -1104,7 +1122,8 @@ $("#cantMesas").addEventListener("change", e => {
   guardarMesas(); render();
 });
 $("#openEdit").onclick = () => { $("#cantMesas").value = mesasCfg.cantidad; $("#usaClave").checked = !!mesasCfg.conClave;
-  for (const id of ["#cantMesas", "#usaClave"]) $(id).closest("label").style.display = VERSION_AVANZADA ? "" : "none"; pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
+  for (const id of ["#cantMesas", "#usaClave"]) $(id).closest("label").style.display = VERSION_AVANZADA ? "" : "none";
+  pintarCompartir(); pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
 function extrasEdit(p){
   const esC = esCarpeta(p);
   const n = esC ? hijos(p.id).length : 0;
@@ -1436,6 +1455,8 @@ const pinActual = () => mesasCfg.pin || hashPin("1");
 const claveOk = v => !usaClave() || hashPin(v) === pinActual();
 // Sin claves (lo normal): siempre administrador y sin botones de clave. Se activa en Ajustes.
 function aplicarSinClave(){
+  document.body.classList.toggle("encargado", esEncargado);
+  if (esEncargado) { document.body.classList.add("sinclave"); if (esAdmin) { esAdmin = false; aplicarRol(); } return; }
   if (!datosListos) return;
   document.body.classList.toggle("sinclave", !usaClave());
   if (!usaClave() && !esAdmin) { esAdmin = true; aplicarRol(); }
@@ -1449,7 +1470,7 @@ function aplicarRol(){
   try { esAdmin ? localStorage.setItem(LS_KEY+"-admin","1") : localStorage.removeItem(LS_KEY+"-admin"); } catch {}
   render();
 }
-try { esAdmin = localStorage.getItem(LS_KEY+"-admin") === "1"; } catch {}
+try { esAdmin = !esEncargado && localStorage.getItem(LS_KEY+"-admin") === "1"; } catch {}
 let modoLogin = "entrar";
 function abrirLogin(m){
   modoLogin = m;
@@ -1543,6 +1564,7 @@ function cuentasCaja(c, contado, efectivo, otros){
   return { filas, cobrado, porMet, nVentas: vs.length, valorInicial, valorFinal, difMerc, plataEsperada, plataContada, difPlata, diferencia: difPlata + difMerc };
 }
 $("#openCaja").onclick = abrirDlgCaja;
+$("#encCaja").onclick = abrirDlgCaja;
 function abrirDlgCaja(){ cierreEnCurso = false; cajaVista = null; renderCaja(); if (!$("#dlgCaja").open) $("#dlgCaja").showModal(); }
 $("#dlgCaja").addEventListener("close", () => { cierreEnCurso = false; });
 function renderCaja(){
@@ -2098,6 +2120,11 @@ if ("serviceWorker" in navigator) {
     <input id="actCodigo" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="123" maxlength="3">
     <p class="act-err" id="actErr" hidden>Ese código no corresponde a este equipo.</p>
     <button type="button" class="btn go" id="actOk">Activar</button>
+    <div class="act-sep"></div>
+    <p>¿Te invitaron a un kiosco? Escribí el código que te pasó el dueño:</p>
+    <input id="kioCodigo" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="123456" maxlength="6">
+    <p class="act-err" id="kioErr" hidden></p>
+    <button type="button" class="btn" id="kioOk" style="width:100%;margin-top:12px;justify-content:center">Entrar al kiosco</button>
   </div>
 </div>
 <style>
@@ -2141,6 +2168,8 @@ function actCodigo3(equipo){
 // Códigos viejos de KyriKiosco y KariKiosco siguen sirviendo
 const ACT_VIEJOS = ["kyrikiosco", "karikiosco"];
 function activacion(arrancar){
+  if (esEncargado) { arrancar(); return; }   // el encargado usa el kiosco del dueño, no necesita activación propia
+  prepararUnirse();
   const kEq = LS_KEY + "-equipo", kAct = LS_KEY + "-activacion";
   let eq = null, guardado = null;
   try { eq = localStorage.getItem(kEq); guardado = localStorage.getItem(kAct); } catch {}
@@ -2167,6 +2196,159 @@ function activacion(arrancar){
   inp.addEventListener("keydown", e => { if (e.key === "Enter") probar(); });
   inp.addEventListener("input", () => { err.hidden = true; });
 }
+/* ---------- Kiosco compartido (Firebase, mismo proyecto que la lista del súper) ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyBlCgIqISdjSiNuM1lZqez3mjE9ZNGZ654",
+  authDomain: "supermercado-ff56a.firebaseapp.com",
+  databaseURL: "https://supermercado-ff56a-default-rtdb.firebaseio.com",
+  projectId: "supermercado-ff56a",
+  storageBucket: "supermercado-ff56a.firebasestorage.app",
+  messagingSenderId: "206180334226",
+  appId: "1:206180334226:web:bb5847e798c3933990c44b"
+};
+const FB_CDN = "https://www.gstatic.com/firebasejs/13.1.0";
+let fbDb = null, fbBase = null;
+async function asegurarFirebase(){
+  if (fbBase) return;
+  const { initializeApp } = await import(`${FB_CDN}/firebase-app.js`);
+  fbDb = await import(`${FB_CDN}/firebase-database.js`);
+  fbBase = fbDb.getDatabase(initializeApp(firebaseConfig, "kiosco"));
+}
+const kioRef = p => fbDb.ref(fbBase, "kioscos/" + p);
+const conTiempo = (pr, ms = 12000) => Promise.race([pr, new Promise((_, no) => setTimeout(() => no(new Error("tiempo")), ms))]);
+async function existeKiosco(cod){ await asegurarFirebase(); return (await conTiempo(fbDb.get(kioRef(cod + "/activo")))).exists(); }
+const limpiarKio = t => String(t || "").replace(/\D/g, "").slice(0, 6);
+function guardarKiosco(k){ try { k ? localStorage.setItem(LS_KEY + "-kiosco", JSON.stringify(k)) : localStorage.removeItem(LS_KEY + "-kiosco"); } catch {} }
+function errorFirebase(e){
+  const m = String(e?.message || e);
+  if (/permission/i.test(m)) return "Firebase no dio permiso (falta la regla de kioscos).";
+  if (/tiempo|network|offline|fetch|import/i.test(m)) return "No hay conexión a internet.";
+  return "No se pudo conectar (" + m + ").";
+}
+function pantallaMensaje(titulo, texto, boton){
+  const box = document.getElementById("activar");
+  box.querySelector(".act-box").innerHTML = `<img src="./icons/icon-192.png" alt="" width="64" height="64"><h2>${esc(titulo)}</h2><p>${esc(texto)}</p><button type="button" class="btn go" id="msgOk">${esc(boton)}</button>`;
+  box.hidden = false;
+  document.getElementById("msgOk").onclick = () => location.reload();
+}
+// Misma forma que la base de los artifacts (doc / collection / onSnapshot). Cada documento va como texto JSON.
+function dbFirebase(cod){
+  const R = p => kioRef(cod + "/" + p);
+  const leer = v => { try { return v == null ? null : JSON.parse(v); } catch { return null; } };
+  const sinError = () => {};
+  return {
+    doc: path => ({
+      set: v => fbDb.set(R(path), JSON.stringify(v)),
+      onSnapshot: (cb, err = sinError) => fbDb.onValue(R(path), s => { const d = leer(s.val()); cb({ exists: d != null, data: () => d }); }, err)
+    }),
+    collection: name => ({
+      doc: id => ({ set: v => fbDb.set(R(name + "/" + id), JSON.stringify(v)), delete: () => fbDb.remove(R(name + "/" + id)) }),
+      onSnapshot: (cb, err = sinError) => fbDb.onValue(R(name), s => {
+        const o = s.val() || {};
+        cb({ docs: Object.keys(o).map(id => ({ id, data: () => leer(o[id]) || {} })) });
+      }, err)
+    })
+  };
+}
+async function dbKiosco(k){
+  if (!(await existeKiosco(k.codigo))) { echarDelKiosco(k); return null; }
+  // Si el dueño cambia el código, este equipo deja de tener acceso
+  fbDb.onValue(kioRef(k.codigo + "/activo"), s => { if (!s.exists()) echarDelKiosco(k); });
+  return dbFirebase(k.codigo);
+}
+function echarDelKiosco(k){
+  // Si este mismo equipo pasó a otro código (el dueño lo cambió), no hay que hacer nada
+  let actual = null; try { actual = JSON.parse(localStorage.getItem(LS_KEY + "-kiosco") || "null"); } catch {}
+  if (actual && actual.codigo !== k.codigo) return;
+  guardarKiosco(null);
+  if (k.rol === "encargado") pantallaMensaje("Ya no tenés acceso a este kiosco", "El dueño cambió el código del kiosco. Pedile el nuevo para volver a entrar.", "Aceptar");
+  else pantallaMensaje("El kiosco dejó de estar compartido", "Este equipo vuelve a usar sus datos guardados.", "Aceptar");
+}
+// Encargado: entrar con el código que le pasó el dueño
+function prepararUnirse(){
+  const inp = document.getElementById("kioCodigo"), err = document.getElementById("kioErr"), btn = document.getElementById("kioOk");
+  const desdeLink = limpiarKio(new URLSearchParams(location.search).get("kiosco"));
+  if (desdeLink) inp.value = desdeLink;
+  const entrar = async () => {
+    const cod = limpiarKio(inp.value);
+    if (cod.length !== 6) { err.textContent = "El código del kiosco tiene 6 números."; err.hidden = false; return; }
+    btn.disabled = true; btn.textContent = "Buscando…"; err.hidden = true;
+    try {
+      if (!(await existeKiosco(cod))) { err.textContent = "No hay ningún kiosco con ese código. Revisalo con el dueño."; err.hidden = false; return; }
+      guardarKiosco({ codigo: cod, rol: "encargado" });
+      try { localStorage.removeItem(LS_KEY + "-admin"); } catch {}
+      location.replace(location.pathname);
+    } catch (e) { err.textContent = errorFirebase(e); err.hidden = false; }
+    finally { btn.disabled = false; btn.textContent = "Entrar al kiosco"; }
+  };
+  btn.onclick = entrar;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") entrar(); });
+  inp.addEventListener("input", () => { err.hidden = true; });
+}
+// Dueño: compartir, invitar y cambiar el código
+async function codigoLibre(){
+  for (let i = 0; i < 10; i++) {
+    const r = new Uint32Array(1); crypto.getRandomValues(r);
+    const cod = String(100000 + r[0] % 900000);
+    if (!(await existeKiosco(cod))) return cod;
+  }
+  throw new Error("No se encontró un código libre");
+}
+const J = v => JSON.stringify(v);
+function datosKiosco(){
+  return { activo: true, creado: Date.now(),
+    registro: { productos: J({ items: productos }), mesas: J(mesasCfg) },
+    ventas: Object.fromEntries(ventas.map(v => [v.id, J(v)])),
+    cajas: Object.fromEntries(Object.entries(cajas).map(([id, c]) => [id, J(c)])) };
+}
+let confirmarCambio = false;
+function pintarCompartir(){
+  const box = $("#compBox"); if (!box) return;
+  confirmarCambio = false;
+  if (KIOSCO?.rol === "dueno") {
+    box.innerHTML = `<p>Código del kiosco</p><b class="cod">${esc(KIOSCO.codigo)}</b>
+      <p>Quien entre con este código puede vender y abrir y cerrar la caja. No puede cambiar productos, precios ni ajustes.</p>
+      <button type="button" class="btn go" id="compInvitar">Enviar invitación</button>
+      <button type="button" class="btn ghost" id="compCambiar">Cambiar código (saca a todos)</button>`;
+    $("#compInvitar").onclick = invitarKiosco;
+    $("#compCambiar").onclick = () => {
+      if (!confirmarCambio) { confirmarCambio = true; $("#compCambiar").textContent = "Tocá de nuevo para confirmar"; return; }
+      cambiarCodigoKiosco();
+    };
+  } else {
+    box.innerHTML = `<p>Sumá a alguien de confianza, por ejemplo quien queda a cargo. Va a ver este mismo kiosco y podrá vender y abrir y cerrar la caja, pero no cambiar productos, precios ni ajustes. Hace falta internet.</p>
+      <button type="button" class="btn go" id="compCrear">Compartir el kiosco</button>`;
+    $("#compCrear").onclick = compartirKiosco;
+  }
+}
+async function compartirKiosco(){
+  const b = $("#compCrear"); b.disabled = true; b.textContent = "Compartiendo…";
+  try {
+    await asegurarFirebase();
+    const cod = await codigoLibre();
+    await conTiempo(fbDb.set(kioRef(cod), datosKiosco()), 20000);
+    guardarKiosco({ codigo: cod, rol: "dueno" });
+    location.reload();
+  } catch (e) { toast(errorFirebase(e)); b.disabled = false; b.textContent = "Compartir el kiosco"; }
+}
+async function cambiarCodigoKiosco(){
+  const b = $("#compCambiar"); b.disabled = true; b.textContent = "Cambiando…";
+  try {
+    const viejo = KIOSCO.codigo, cod = await codigoLibre();
+    const d = (await conTiempo(fbDb.get(kioRef(viejo)))).val() || datosKiosco();
+    await conTiempo(fbDb.set(kioRef(cod), { ...d, activo: true }), 20000);
+    guardarKiosco({ codigo: cod, rol: "dueno" });
+    await conTiempo(fbDb.remove(kioRef(viejo)));
+    location.reload();
+  } catch (e) { toast(errorFirebase(e)); b.disabled = false; b.textContent = "Cambiar código (saca a todos)"; }
+}
+async function invitarKiosco(){
+  const cod = KIOSCO.codigo, link = location.origin + location.pathname + "?kiosco=" + cod;
+  const txt = `Te sumo a mi kiosco en Cuadraditos Kiosco.\n1. Abrí este link e instalá la app: ${link}\n2. Abrila desde el ícono y en "¿Te invitaron a un kiosco?" escribí este código: ${cod}`;
+  try { if (navigator.share) { await navigator.share({ text: txt }); return; } } catch (e) { if (e?.name === "AbortError") return; }
+  try { await navigator.clipboard.writeText(txt); toast("Invitación copiada. Pegala en WhatsApp."); } catch { toast("Código del kiosco: " + cod); }
+}
+
 activacion(iniciar);
 </script>
 </body>
