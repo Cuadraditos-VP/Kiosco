@@ -6,12 +6,12 @@
 <meta name="theme-color" content="#d9e1db">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="KyriKiosco">
+<meta name="apple-mobile-web-app-title" content="Cuadraditos Kiosco">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
-<title>KyriKiosco</title>
+<title>Cuadraditos Kiosco</title>
 <meta name="color-scheme" content="only light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -153,6 +153,7 @@ aside.tk{position:sticky;top:16px;width:100%;min-width:0;justify-self:stretch;al
 /* Roles y edición */
 body:not(.admin) .solo-admin{display:none!important}
 body.admin .solo-caja{display:none!important}
+body.sinclave #btnLogin,body.sinclave #btnClave,body.sinclave #btnSalir,body.sinclave input[type="password"]{display:none!important}   /* sin claves */
 .acc{display:flex;gap:8px;align-items:center}
 .menubtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .menubtn.lock{width:40px;height:40px;border-radius:12px;opacity:.5}
@@ -371,7 +372,7 @@ dialog::backdrop{background:var(--scrim)}
 <div class="wrap">
   <header class="top">
     <div>
-      <h1 id="titulo"><span>KyriKiosco</span></h1>
+      <h1 id="titulo">Cuadraditos <span>Kiosco</span></h1>
       <button class="hoybtn solo-admin" id="openHoy" aria-label="Ver ventas de hoy"><span class="hoy"><span>Hoy <b id="caja">$ 0</b></span><span><b id="nVentas">0</b> ventas</span><span class="g">Ganancia <b id="gan">—</b></span></span></button>
     </div>
     <div class="acc">
@@ -575,6 +576,7 @@ dialog::backdrop{background:var(--scrim)}
       <div class="sgroup" style="padding-top:0">Métodos de cobro</div>
       <div class="metcfg" id="metCfg"></div>
       <label class="sgroup" style="padding-top:4px;justify-content:space-between" for="cantMesas">Mesas <input class="num" id="cantMesas" type="text" min="0" max="60" inputmode="numeric" style="width:90px"></label>
+      <label class="sgroup" style="padding-top:4px;justify-content:space-between" for="usaClave">Pedir clave de administrador <input id="usaClave" type="checkbox" style="width:22px;height:22px"></label>
       <div hidden><div id="editRows"></div><button type="button" id="addProd"></button><button type="button" id="addFold"></button></div>
     </div>
     <footer><button type="button" class="btn go" data-close>Listo</button></footer>
@@ -601,6 +603,17 @@ const SVG_PRINT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const BASE_LOCAL = [];
 // Clave de guardado nueva = todos los dispositivos empiezan de cero (los datos viejos quedan guardados aparte)
 const LS_KEY = "kyrikiosco-v1";
+// Si en este equipo se usaba KariKiosco, la primera vez se traen sus datos y su activación
+try {
+  const VIEJA = "karikiosco-v1";
+  if (!localStorage.getItem(LS_KEY) && localStorage.getItem(VIEJA)) {
+    const d = JSON.parse(localStorage.getItem(VIEJA));
+    d.mesas = { ...(d.mesas || {}), cantidad: d.mesas?.cantidad ?? 0, abiertas: d.mesas?.abiertas || {}, sinClave: true };
+    localStorage.setItem(LS_KEY, JSON.stringify(d));
+    for (const k of ["-abiertas", "-equipo", "-activacion"]) { const v = localStorage.getItem(VIEJA + k); if (v !== null && localStorage.getItem(LS_KEY + k) === null) localStorage.setItem(LS_KEY + k, v); }
+    localStorage.setItem(LS_KEY + "-desde-karikiosco", "1");
+  }
+} catch {}
 
 let productos = [], ventas = [], cajas = {};
 // Mostrador: venta que se cobra en el momento. Mesas: cuentas abiertas que se cobran al final.
@@ -734,7 +747,7 @@ async function iniciar(){
     db.doc("registro/mesas").onSnapshot(s => {
       if (mesasSucias) return;
       const d = s.exists ? JSON.parse(JSON.stringify(s.data())) : { cantidad: 8, abiertas: {} };
-      mesasCfg = { cantidad: d.cantidad ?? 8, abiertas: d.abiertas || {}, ...(d.pin ? { pin: d.pin } : {}), ...(d.titulo ? { titulo: d.titulo } : {}), ...(d.metOcultos ? { metOcultos: d.metOcultos } : {}) };
+      mesasCfg = { cantidad: d.cantidad ?? 8, abiertas: d.abiertas || {}, ...(d.pin ? { pin: d.pin } : {}), ...(d.titulo ? { titulo: d.titulo } : {}), ...(d.metOcultos ? { metOcultos: d.metOcultos } : {}), ...(d.sinClave ? { sinClave: true } : {}) };
       pintarTitulo();
       if (cuentaActiva !== null) { const k=String(cuentaActiva); mesasCfg.abiertas[k] ||= { items:{}, desde: Date.now() }; carrito = mesasCfg.abiertas[k].items; }
       render();
@@ -1077,11 +1090,16 @@ $("#formStock").addEventListener("submit", e => {
 
 /* ---------- Editar productos ---------- */
 let pickerAbierto = null, confirmando = null, editando = false;
+$("#usaClave").addEventListener("change", e => {
+  if (e.target.checked) delete mesasCfg.sinClave; else mesasCfg.sinClave = true;
+  guardarMesas(); aplicarSinClave();
+  toast(e.target.checked ? (mesasCfg.pin ? "Se pide la clave" : "Se pide la clave · la clave inicial es 1") : "Sin claves");
+});
 $("#cantMesas").addEventListener("change", e => {
   mesasCfg.cantidad = Math.max(0, Math.min(60, parseInt(e.target.value)||0)); e.target.value = mesasCfg.cantidad;
   guardarMesas(); render();
 });
-$("#openEdit").onclick = () => { $("#cantMesas").value = mesasCfg.cantidad; pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
+$("#openEdit").onclick = () => { $("#cantMesas").value = mesasCfg.cantidad; $("#usaClave").checked = !mesasCfg.sinClave; pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
 function extrasEdit(p){
   const esC = esCarpeta(p);
   const n = esC ? hijos(p.id).length : 0;
@@ -1293,7 +1311,7 @@ $("#histBody").addEventListener("click", e => {
 $("#histBody").addEventListener("submit", async e => {
   if (e.target.id !== "formReset") return;
   e.preventDefault();
-  if (hashPin($("#claveReset").value) !== pinActual()) { $("#errReset").hidden = false; $("#claveReset").value = ""; $("#claveReset").focus(); return; }
+  if (!claveOk($("#claveReset").value)) { $("#errReset").hidden = false; $("#claveReset").value = ""; $("#claveReset").focus(); return; }
   const cuantas = ventas.length;
   resetAbierto = false;
   if (modo === "db") {
@@ -1315,7 +1333,7 @@ $("#histBody").addEventListener("submit", async e => {
 function hoyArchivo(){ return hoyStr(); }
 $("#btnExport").onclick = async () => {
   const data = { app: "kyrikiosco", formato: 1, exportado: new Date().toISOString(), productos, ventas, cajas };
-  const nombre = `kyrikiosco-${hoyArchivo()}.json`;
+  const nombre = `cuadraditos-kiosco-${hoyArchivo()}.json`;
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
   let dl = null;
   try { dl = window.claude?.use ? await window.claude.use("downloads") : null; } catch { dl = null; }
@@ -1334,8 +1352,8 @@ $("#fileImport").addEventListener("change", async e => {
   const f = e.target.files?.[0]; if (!f) return;
   let d;
   try { d = JSON.parse(await f.text()); } catch { toast("Ese archivo no es un JSON válido"); return; }
-  if (!d || !Array.isArray(d.productos) || !Array.isArray(d.ventas) || d.app !== "kyrikiosco") {
-    toast("Ese archivo no es una exportación de KyriKiosco"); return;
+  if (!d || !Array.isArray(d.productos) || !Array.isArray(d.ventas) || !["kyrikiosco","karikiosco"].includes(d.app)) {
+    toast("Ese archivo no es una exportación de Cuadraditos Kiosco"); return;
   }
   pendienteImport = d;
   const nP = d.productos.filter(x=>!esCarpeta(x)).length, nC = d.productos.filter(esCarpeta).length;
@@ -1410,6 +1428,12 @@ document.addEventListener("dblclick", e => e.preventDefault(), { passive: false 
 /* ---------- Roles: modo caja / administrador ---------- */
 function hashPin(t){ let h = 5381; for (const ch of "kyri|" + String(t)) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return h.toString(36); }
 const pinActual = () => mesasCfg.pin || hashPin("1");
+const claveOk = v => !!mesasCfg.sinClave || hashPin(v) === pinActual();
+// Sin claves: siempre administrador y sin botones de clave
+function aplicarSinClave(){
+  document.body.classList.toggle("sinclave", !!mesasCfg.sinClave);
+  if (mesasCfg.sinClave && !esAdmin) { esAdmin = true; aplicarRol(); }
+}
 function aplicarRol(){
   if (!esAdmin) modoEdicion = false;
   document.body.classList.toggle("admin", esAdmin);
@@ -1544,7 +1568,7 @@ function renderCaja(){
       const ahora = Date.now();
       guardarCaja({ id: hoy + "_" + ahora.toString(36), fecha: hoy, abierta: ahora, fondo: Math.max(0, parseFloat($("#cjFondo").value) || 0), inicial, ingresos: {} });
       render(); $("#dlgCaja").close();
-      $("#dlgSeguir").showModal(); $("#seguirNo").focus();
+      if (mesasCfg.sinClave) toast("Caja abierta"); else { $("#dlgSeguir").showModal(); $("#seguirNo").focus(); }
     };
     return;
   }
@@ -1723,7 +1747,7 @@ function pedirClaveInline(box, accion, fn){
   f.querySelector("[data-cancelar]").onclick = () => { box.innerHTML = ""; };
   f.onsubmit = e => {
     e.preventDefault();
-    if (hashPin(inp.value) !== pinActual()) { err.hidden = false; inp.value = ""; inp.focus(); return; }
+    if (!claveOk(inp.value)) { err.hidden = false; inp.value = ""; inp.focus(); return; }
     box.innerHTML = ""; fn();
   };
 }
@@ -1745,7 +1769,7 @@ function formEliminarCaja(c){
   $("#elimNo").onclick = () => { box.innerHTML = ""; $("#cjEliminar").hidden = false; };
   $("#formElimCaja").onsubmit = async e => {
     e.preventDefault();
-    if (hashPin($("#elimClave").value) !== pinActual()) { $("#elimErr").hidden = false; $("#elimClave").value = ""; $("#elimClave").focus(); return; }
+    if (!claveOk($("#elimClave").value)) { $("#elimErr").hidden = false; $("#elimClave").value = ""; $("#elimClave").focus(); return; }
     const conVentas = true, vs = ventasDeCaja(c);
     delete cajas[c.id];
     if (modo === "db") {
@@ -1820,11 +1844,12 @@ $("#metCfg").addEventListener("change", e => {
 });
 
 /* ---------- Nombre de la app ---------- */
-const tituloApp = () => (mesasCfg.titulo || "KyriKiosco").trim();
+const tituloApp = () => (mesasCfg.titulo || "Cuadraditos Kiosco").trim();
 function pintarTitulo(){
   const t = tituloApp(), i = t.lastIndexOf(" ");
   $("#titulo").innerHTML = i > 0 ? `${esc(t.slice(0,i))} <span>${esc(t.slice(i+1))}</span>` : `<span>${esc(t)}</span>`;
   document.title = t;
+  aplicarSinClave();
 }
 $("#titulo").addEventListener("click", () => {
   if (!modoEdicion) return;
@@ -2060,11 +2085,11 @@ if ("serviceWorker" in navigator) {
 <div id="activar" hidden>
   <div class="act-box">
     <img src="./icons/icon-192.png" alt="" width="64" height="64">
-    <h2>Activar KyriKiosco</h2>
+    <h2>Activar Cuadraditos Kiosco</h2>
     <p>Para usar la app en este equipo, pasale este número a quien te la vendió:</p>
     <div class="act-eq"><b id="actEquipo">——</b><button type="button" class="btn" id="actCopiar">Copiar</button></div>
     <p>Después escribí acá el código que te devuelve:</p>
-    <input id="actCodigo" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX" maxlength="12">
+    <input id="actCodigo" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="123" maxlength="3">
     <p class="act-err" id="actErr" hidden>Ese código no corresponde a este equipo.</p>
     <button type="button" class="btn go" id="actOk">Activar</button>
   </div>
@@ -2103,17 +2128,22 @@ function actCodigo(cliente, equipo){
   return s.slice(0,4) + "-" + s.slice(4);
 }
 
-const ACT_CLIENTE = "kyrikiosco";
+// Código nuevo: 3 números, igual para todos los clientes
+function actCodigo3(equipo){
+  return String(actHash(ACT_SECRETO + "|cuadraditos|" + actLimpiar(equipo))[0] % 1000).padStart(3, "0");
+}
+// Códigos viejos de KyriKiosco y KariKiosco siguen sirviendo
+const ACT_VIEJOS = ["kyrikiosco", "karikiosco"];
 function activacion(arrancar){
   const kEq = LS_KEY + "-equipo", kAct = LS_KEY + "-activacion";
   let eq = null, guardado = null;
   try { eq = localStorage.getItem(kEq); guardado = localStorage.getItem(kAct); } catch {}
   if (!eq) {
     const r = new Uint32Array(6); crypto.getRandomValues(r);
-    eq = Array.from(r, x => ACT_ALFA[x % 32]).join(""); eq = eq.slice(0,3) + "-" + eq.slice(3);
+    eq = String(1000 + r[0] % 9000);   // número de equipo: 4 cifras
     try { localStorage.setItem(kEq, eq); } catch {}
   }
-  const valido = c => actLimpiar(c) === actLimpiar(actCodigo(ACT_CLIENTE, eq));
+  const valido = c => { const x = actLimpiar(c); return x === actCodigo3(eq) || ACT_VIEJOS.some(cl => x === actLimpiar(actCodigo(cl, eq))); };
   if (guardado && valido(guardado)) { arrancar(); return; }
   const box = document.getElementById("activar"), inp = document.getElementById("actCodigo"), err = document.getElementById("actErr");
   document.getElementById("actEquipo").textContent = eq;
@@ -2124,7 +2154,7 @@ function activacion(arrancar){
   const probar = () => {
     if (!valido(inp.value)) { err.hidden = false; inp.select(); return; }
     try { localStorage.setItem(kAct, actLimpiar(inp.value)); } catch {}
-    box.hidden = true; arrancar(); toast("¡Listo! KyriKiosco activado");
+    box.hidden = true; arrancar(); toast("¡Listo! Cuadraditos Kiosco activado");
   };
   document.getElementById("actOk").onclick = probar;
   inp.addEventListener("keydown", e => { if (e.key === "Enter") probar(); });

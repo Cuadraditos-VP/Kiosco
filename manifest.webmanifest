@@ -1,6 +1,6 @@
 {
-  "name": "KyriKiosco",
-  "short_name": "KyriKiosco",
+  "name": "Cuadraditos Kiosco",
+  "short_name": "Cuadraditos Kiosco",
   "description": "Registro de ventas del kiosco: productos, stock, ticket y caja del día.",
   "lang": "es-AR",
   "start_url": "./",
