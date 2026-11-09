@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#d9e1db">
+<meta name="theme-color" content="#f6f1e6">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Cuadraditos Kiosco">
@@ -18,7 +18,7 @@
 <style>
 /* Layout: mostrador a la izquierda (productos), ticket de la venta a la derecha; en celular el ticket baja. */
 :root{
-  --bg:#d9e1db; --surface:#ffffff; --ink:#1d2621; --muted:#66746b; --line:#c3cec6;
+  --bg:#f6f1e6; --surface:#ffffff; --ink:#1d2621; --muted:#66746b; --line:#d6cfc0;
   --accent:#1f6b4a; --accent-ink:#ffffff; --ember:#c8582a; --ember-soft:#fbe9df;
   --ticket:#fffdf6; --chip:#e6ece8; --tint:#f6f8f6; --danger:#b3261e; --scrim:rgba(18,24,20,.45);
   color-scheme: only light;
@@ -65,16 +65,17 @@ h1 span{color:var(--ember)}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 @media (max-width:560px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
 .card{position:relative;min-width:0;max-width:100%}
-.card .hit{width:100%;aspect-ratio:5/4;max-width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--surface);border:1px solid #b9c5bd;box-shadow:0 2px 0 #b9c5bd,0 4px 10px rgba(30,50,40,.10);border-radius:18px;padding:12px 8px;cursor:pointer;font:inherit;color:inherit;text-align:center}
-.card .hit:active{transform:translateY(2px);box-shadow:0 0 0 #b9c5bd}
+.card .hit{width:100%;aspect-ratio:5/4;max-width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:var(--surface);border:1px solid #d3cab8;box-shadow:0 2px 0 #d3cab8,0 4px 10px rgba(60,45,20,.08);border-radius:18px;padding:12px 8px;cursor:pointer;font:inherit;color:inherit;text-align:center}
+.card .hit:active{transform:translateY(2px);box-shadow:0 0 0 #d3cab8}
 .card .ico{width:54px;height:54px;font-size:32px;border-radius:14px}
 .card .nm{font-family:var(--f-display);font-weight:600;font-size:16px;line-height:1.15;overflow-wrap:anywhere;max-width:100%}
 .card .pr{font:700 13px var(--f-num);color:var(--muted);font-variant-numeric:tabular-nums}
-.card.fold .hit{background:#cfe3d7;border-color:#9fbfad;box-shadow:0 2px 0 #9fbfad,0 4px 10px rgba(30,50,40,.10)}
-.card.fold .ico{background:#ffffffcc}
+/* Carpetas en verde (como el mostrador del ícono) para que se distingan de los productos */
+.card.fold .hit{background:var(--accent);border-color:#154d35;box-shadow:0 2px 0 #154d35,0 4px 10px rgba(20,50,35,.18);color:#fff}
+.card.fold .ico{background:#ffffffeb}
 .card.on .hit{background:var(--ember-soft);border-color:var(--ember);box-shadow:inset 0 0 0 1px var(--ember)}
 .card .q{position:absolute;top:8px;right:8px;min-width:30px;height:30px;padding:0 8px;border-radius:999px;background:var(--ember);color:#fff;font:700 15px var(--f-num);display:grid;place-items:center;pointer-events:none}
-.card.fold .q{background:var(--accent)}
+.card.fold .q{background:#fff;color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .card .menos{position:absolute;top:8px;left:8px;width:34px;height:34px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 20px var(--f-num);display:grid;place-items:center;cursor:pointer;line-height:1}
 .card .st{position:absolute;bottom:8px;right:8px;font:700 11px var(--f-num);padding:2px 7px;border-radius:999px;background:var(--chip);color:var(--ink);pointer-events:none}
 .card .st.low{background:var(--ember-soft);color:var(--ember);box-shadow:inset 0 0 0 1px var(--ember)}
