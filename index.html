@@ -603,12 +603,16 @@ const SVG_PRINT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" st
 const BASE_LOCAL = [];
 // Clave de guardado nueva = todos los dispositivos empiezan de cero (los datos viejos quedan guardados aparte)
 const LS_KEY = "kyrikiosco-v1";
+// Versión simple: solo mostrador y sin clave. Poner en true para habilitar mesas y clave de administrador en Ajustes.
+const VERSION_AVANZADA = false;
+const usaClave = () => VERSION_AVANZADA && !!mesasCfg.conClave;
+let datosListos = false;   // la configuración guardada ya se leyó
 // Si en este equipo se usaba KariKiosco, la primera vez se traen sus datos y su activación
 try {
   const VIEJA = "karikiosco-v1";
   if (!localStorage.getItem(LS_KEY) && localStorage.getItem(VIEJA)) {
     const d = JSON.parse(localStorage.getItem(VIEJA));
-    d.mesas = { ...(d.mesas || {}), cantidad: d.mesas?.cantidad ?? 0, abiertas: d.mesas?.abiertas || {}, sinClave: true };
+    d.mesas = { ...(d.mesas || {}), cantidad: d.mesas?.cantidad ?? 0, abiertas: d.mesas?.abiertas || {} };
     localStorage.setItem(LS_KEY, JSON.stringify(d));
     for (const k of ["-abiertas", "-equipo", "-activacion"]) { const v = localStorage.getItem(VIEJA + k); if (v !== null && localStorage.getItem(LS_KEY + k) === null) localStorage.setItem(LS_KEY + k, v); }
     localStorage.setItem(LS_KEY + "-desde-karikiosco", "1");
@@ -747,8 +751,8 @@ async function iniciar(){
     db.doc("registro/mesas").onSnapshot(s => {
       if (mesasSucias) return;
       const d = s.exists ? JSON.parse(JSON.stringify(s.data())) : { cantidad: 8, abiertas: {} };
-      mesasCfg = { cantidad: d.cantidad ?? 8, abiertas: d.abiertas || {}, ...(d.pin ? { pin: d.pin } : {}), ...(d.titulo ? { titulo: d.titulo } : {}), ...(d.metOcultos ? { metOcultos: d.metOcultos } : {}), ...(d.sinClave ? { sinClave: true } : {}) };
-      pintarTitulo();
+      mesasCfg = { cantidad: d.cantidad ?? 8, abiertas: d.abiertas || {}, ...(d.pin ? { pin: d.pin } : {}), ...(d.titulo ? { titulo: d.titulo } : {}), ...(d.metOcultos ? { metOcultos: d.metOcultos } : {}), ...(d.conClave ? { conClave: true } : {}) };
+      datosListos = true; pintarTitulo();
       if (cuentaActiva !== null) { const k=String(cuentaActiva); mesasCfg.abiertas[k] ||= { items:{}, desde: Date.now() }; carrito = mesasCfg.abiertas[k].items; }
       render();
     }, () => {});
@@ -761,7 +765,7 @@ async function iniciar(){
       ventas = q.docs.map(d => d.data()).sort((a,b)=>a.ts-b.ts); render(); if ($("#dlgHist").open) renderHist();
     }, () => setSave("err","Sin conexión con los datos"));
   } else {
-    modo = "local"; cargarLocal(); cajasCargadas = true; guardarLocal(); render(); pintarTitulo();
+    modo = "local"; cargarLocal(); datosListos = true; cajasCargadas = true; guardarLocal(); render(); pintarTitulo();
   }
 }
 const esCarpeta = x => !!x && x.tipo === "carpeta";
@@ -833,7 +837,7 @@ function render(){
 function totalCuenta(items){ let t=0; for (const id in items){ const p=productos.find(x=>x.id===id); if (p) t += p.precio*items[id]; } return t; }
 function renderMesas(){
   const abiertas = Object.keys(mesasCfg.abiertas).filter(k => Object.keys(mesasCfg.abiertas[k].items||{}).length).map(Number);
-  const n = Math.max(mesasCfg.cantidad||0, ...abiertas, 0);
+  const n = VERSION_AVANZADA ? Math.max(mesasCfg.cantidad||0, ...abiertas, 0) : 0;   // versión simple: solo mostrador
   const el = $("#mesas");
   el.hidden = n === 0;
   if (!n) return;
@@ -1091,7 +1095,7 @@ $("#formStock").addEventListener("submit", e => {
 /* ---------- Editar productos ---------- */
 let pickerAbierto = null, confirmando = null, editando = false;
 $("#usaClave").addEventListener("change", e => {
-  if (e.target.checked) delete mesasCfg.sinClave; else mesasCfg.sinClave = true;
+  if (e.target.checked) mesasCfg.conClave = true; else delete mesasCfg.conClave;
   guardarMesas(); aplicarSinClave();
   toast(e.target.checked ? (mesasCfg.pin ? "Se pide la clave" : "Se pide la clave · la clave inicial es 1") : "Sin claves");
 });
@@ -1099,7 +1103,8 @@ $("#cantMesas").addEventListener("change", e => {
   mesasCfg.cantidad = Math.max(0, Math.min(60, parseInt(e.target.value)||0)); e.target.value = mesasCfg.cantidad;
   guardarMesas(); render();
 });
-$("#openEdit").onclick = () => { $("#cantMesas").value = mesasCfg.cantidad; $("#usaClave").checked = !mesasCfg.sinClave; pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
+$("#openEdit").onclick = () => { $("#cantMesas").value = mesasCfg.cantidad; $("#usaClave").checked = !!mesasCfg.conClave;
+  for (const id of ["#cantMesas", "#usaClave"]) $(id).closest("label").style.display = VERSION_AVANZADA ? "" : "none"; pintarMetCfg(); pickerAbierto=null; confirmando=null; renderEdit(); $("#dlgEdit").showModal(); };
 function extrasEdit(p){
   const esC = esCarpeta(p);
   const n = esC ? hijos(p.id).length : 0;
@@ -1428,11 +1433,12 @@ document.addEventListener("dblclick", e => e.preventDefault(), { passive: false 
 /* ---------- Roles: modo caja / administrador ---------- */
 function hashPin(t){ let h = 5381; for (const ch of "kyri|" + String(t)) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return h.toString(36); }
 const pinActual = () => mesasCfg.pin || hashPin("1");
-const claveOk = v => !!mesasCfg.sinClave || hashPin(v) === pinActual();
-// Sin claves: siempre administrador y sin botones de clave
+const claveOk = v => !usaClave() || hashPin(v) === pinActual();
+// Sin claves (lo normal): siempre administrador y sin botones de clave. Se activa en Ajustes.
 function aplicarSinClave(){
-  document.body.classList.toggle("sinclave", !!mesasCfg.sinClave);
-  if (mesasCfg.sinClave && !esAdmin) { esAdmin = true; aplicarRol(); }
+  if (!datosListos) return;
+  document.body.classList.toggle("sinclave", !usaClave());
+  if (!usaClave() && !esAdmin) { esAdmin = true; aplicarRol(); }
 }
 function aplicarRol(){
   if (!esAdmin) modoEdicion = false;
@@ -1568,7 +1574,7 @@ function renderCaja(){
       const ahora = Date.now();
       guardarCaja({ id: hoy + "_" + ahora.toString(36), fecha: hoy, abierta: ahora, fondo: Math.max(0, parseFloat($("#cjFondo").value) || 0), inicial, ingresos: {} });
       render(); $("#dlgCaja").close();
-      if (mesasCfg.sinClave) toast("Caja abierta"); else { $("#dlgSeguir").showModal(); $("#seguirNo").focus(); }
+      if (!usaClave()) toast("Caja abierta"); else { $("#dlgSeguir").showModal(); $("#seguirNo").focus(); }
     };
     return;
   }

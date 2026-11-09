@@ -2,7 +2,11 @@
 
 Registro de ventas del kiosco: productos con ícono o foto, stock, ticket imprimible y caja del día.
 Es la misma app para todos los clientes. Cada uno pone el nombre de su negocio tocando el título
-(en modo edición) y elige en **Ajustes** si usa mesas (0 = solo mostrador) y si pide clave de administrador.
+(en modo edición).
+
+Por ahora es la **versión simple**: solo mostrador y sin clave de administrador.
+Para habilitar mesas y clave (se eligen en Ajustes), cambiar en `index.html`:
+`const VERSION_AVANZADA = false;` → `true`.
 Los datos se guardan en cada dispositivo. Usá el botón de exportar para hacer copias de seguridad.
 
 ## Instalar
@@ -15,8 +19,8 @@ Los datos se guardan en cada dispositivo. Usá el botón de exportar para hacer 
 ## Clientes de antes
 - Los equipos activados con KyriKiosco o KariKiosco siguen activados (los códigos viejos sirven).
 - Si en el celular se usaba KariKiosco, la primera vez que abre esta app se traen sus productos,
-  ventas y activación, y queda configurada sin claves como estaba.
+  ventas y activación.
 
 ## Al actualizar
 Cada vez que reemplaces `index.html`, subí la versión en `sw.js`:
-`const VERSION = "kyrikiosco-v5";` → v6, v7…
+`const VERSION = "kyrikiosco-v6";` → v7, v8…
