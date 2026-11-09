@@ -1888,7 +1888,7 @@ function pintarItem(){
   $("#fNuevo").hidden = esC || !!itemEd.id;
   $("#itemIco").innerHTML = itemEd.imagen ? `<img src="${esc(rutaImg(itemEd.imagen))}" alt="">` : esc(itemEd.icono);
   if (!$("#itemPicker").hidden) {
-    $("#itemPicker").innerHTML = `<div class="gal"><span class="label">Galería</span><div class="galg">${GALERIA.map(g => `<button type="button" data-gal="${g.f}" title="${esc(g.n)}" aria-label="${esc(g.n)}" aria-pressed="${itemEd.imagen === "galeria/"+g.f}"><img src="${GAL_DIR}${g.f}" alt="" loading="lazy"></button>`).join("")}</div><span class="label">Emojis</span></div>` + ICONOS.map(i => `<button type="button" data-ic="${i}" aria-pressed="${!itemEd.imagen && i===itemEd.icono}">${i}</button>`).join("")
+    $("#itemPicker").innerHTML = `<div class="gal"><span class="label">Galería</span><div class="galg">${GALERIA.map(g => `<button type="button" data-gal="${g.f}" title="${esc(g.n)}" aria-label="${esc(g.n)}" aria-pressed="${itemEd.imagen === "galeria/"+g.f}"><img src="${rutaImg("galeria/"+g.f)}" alt="" loading="lazy"></button>`).join("")}</div><span class="label">Emojis</span></div>` + ICONOS.map(i => `<button type="button" data-ic="${i}" aria-pressed="${!itemEd.imagen && i===itemEd.icono}">${i}</button>`).join("")
       + `<div class="up"><label class="btn ghost" for="itemFile">Subir imagen…</label><input type="file" id="itemFile" accept="image/*" hidden>${itemEd.imagen ? `<button type="button" class="btn ghost" data-sinimg>Quitar imagen</button>` : ""}</div>`;
   }
 }
